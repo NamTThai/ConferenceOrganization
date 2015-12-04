@@ -83,7 +83,9 @@ class ConferenceForms(messages.Message):
     items = messages.MessageField(ConferenceForm, 1, repeated=True)
 
 class SessionSpeaker(ndb.Model):
-    """SessionSpeaker -- SessionSpeaker object"""
+    """SessionSpeaker -- SessionSpeaker object
+    There should be no two speaker objects that have the same email address
+    """
     name            = ndb.StringProperty(required=True)
     email           = ndb.StringProperty(required=True)
 
@@ -91,14 +93,14 @@ class Session(ndb.Model):
     """Session -- Session object"""
     name            = ndb.StringProperty(required=True)
     highlights      = ndb.StringProperty()
-    speaker         = ndb.StructuredProperty(SessionSpeaker)
+    speakerEmail    = ndb.StringProperty()
     duration        = ndb.FloatProperty()
     typeOfSession   = ndb.StringProperty()
     date            = ndb.StringProperty()
     startTime       = ndb.StringProperty()
 
 class SessionType(messages.Enum):
-    """SessionType -- session type enumeration value"""
+    """SessionType -- placeholder session type enumeration value"""
     NA = 1
     Lecture = 2
     KeyNote = 3

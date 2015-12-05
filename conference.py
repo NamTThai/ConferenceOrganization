@@ -505,26 +505,26 @@ class ConferenceApi(remote.Service):
     def getConferenceSessions(self, request):
         """Return all sessions of the same conference"""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey)
-        result = Session.query(Session.typeOfSession == "Lecture", ancestor=conf)
+        result = Session.query(ancestor=conf)
         return SessionForms(
             items=[self._copySessionToForm(session) for session in result]
         )
 
 
-    # @endpoints.method(SESSION_TYPE_GET, SessionForms,
-    #         path='session/{type}/{websafeConferenceKey}',
-    #         http_method='GET', name='getConferenceSessionByType')
-    # def getConferenceSessionByType(self, request):
-    #     """Return all sessions of a given conference that have specified type"""
-    #     conf = ndb.Key(urlsafe=request.websafeConferenceKey)
-    #     result = Session.query(Session.typeOfSession == request.type, ancestor=conf)
-    #     return SessionForms(
-    #         items=[self._copySessionToForm(session) for session in result]
-    #     )
+    @endpoints.method(SESSION_TYPE_GET, SessionForms,
+            path='session/{websafeConferenceKey}/{type}',
+            http_method='GET', name='getConferenceSessionByType')
+    def getConferenceSessionByType(self, request):
+        """Return all sessions of a given conference that have specified type"""
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+        result = Session.query(Session.typeOfSession == request.type, ancestor=conf)
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in result]
+        )
 
 
     @endpoints.method(SESSION_SPEAKER_GET, SessionForms,
-            path='session/{speakerEmail}',
+            path='session/speaker/{speakerEmail}',
             http_method='GET', name='getSessionBySpeaker')
     def getSessionBySpeaker(self, request):
         """Return all sessions of the same speaker across conferences,

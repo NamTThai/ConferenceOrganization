@@ -1,4 +1,4 @@
-App Engine application for the Udacity training course.
+Conference Organization application, allowing users to create conference, manage sessions and speakers, among other functionalities.
 
 ## Products
 - [App Engine][1]
@@ -22,6 +22,14 @@ App Engine application for the Udacity training course.
 1. Run the app with the devserver using `dev_appserver.py DIR`, and ensure it's running by visiting your local server's address (by default [localhost:8080][5].)
 1. (Optional) Generate your client library(ies) with [the endpoints tool][6].
 1. Deploy your application.
+
+## Task 1: Add Sessions to a Conference
+1. Session entities are required to have a name. Each of them has a conference entity as ancestor.
+1. Session speaker entities have no ancestor. They are uniquely identified by their speakers' email address
+
+## Task 2: Add Sessions to User wishlist
+1. User wishlist is stored in his/her Profile entity. This wishlist consists list of URL safe Session IDs
+1. User can add, remove and view his/her wishlist
 
 
 [1]: https://developers.google.com/appengine

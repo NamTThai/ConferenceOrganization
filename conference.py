@@ -111,6 +111,18 @@ SESSION_TYPE_GET = endpoints.ResourceContainer(
     type=messages.StringField(2),
 )
 
+SESSION_CONF_SPEAKER_GET = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+    speakerEmail=messages.StringField(2),
+)
+
+SESSION_CONF_DURATION_GET = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+    duration=messages.FloatField(2),
+)
+
 SESSION_SPEAKER_GET = endpoints.ResourceContainer(
     message_types.VoidMessage,
     speakerEmail=messages.StringField(1),
@@ -379,7 +391,9 @@ class ConferenceApi(remote.Service):
         """Copy relevant fields from Session to SessionForm."""
         sf = SessionForm()
         for field in sf.all_fields():
-            if hasattr(session, field.name):
+            if field.name == 'startTime':
+                sf.startTime = str(session.startTime)
+            elif hasattr(session, field.name):
                 setattr(sf, field.name, getattr(session, field.name))
         speakerEmail = session.speakerEmail
         speaker = SessionSpeaker.query(SessionSpeaker.email == speakerEmail).get()
@@ -425,6 +439,11 @@ class ConferenceApi(remote.Service):
             if data[df] in (None, []):
                 data[df] = SESSION_DEFAULTS[df]
                 setattr(request, df, SESSION_DEFAULTS[df])
+
+        try:
+            data['startTime'] = datetime.strptime(data['startTime'][:10], "%H:%M").time()
+        except ValueError:
+            raise endpoints.BadRequestException("Make sure that your start time is in HH:MM format")
 
         # generate Profile Key based on user ID and Session
         # ID based on Profile key get Session key from ID
@@ -506,7 +525,7 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(SESSION_GET, SessionForms,
-            path='session/{websafeConferenceKey}',
+            path='session/conf/{websafeConferenceKey}',
             http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """Return all sessions of the same conference"""
@@ -518,12 +537,38 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(SESSION_TYPE_GET, SessionForms,
-            path='session/{websafeConferenceKey}/{type}',
+            path='session/conf/{websafeConferenceKey}/type/{type}',
             http_method='GET', name='getConferenceSessionByType')
     def getConferenceSessionByType(self, request):
         """Return all sessions of a given conference that have specified type"""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey)
         result = Session.query(Session.typeOfSession == request.type, ancestor=conf)
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in result]
+        )
+
+
+    @endpoints.method(SESSION_CONF_SPEAKER_GET, SessionForms,
+            path='session/conf/{websafeConferenceKey}/speaker/{speakerEmail}',
+            http_method='GET', name='getConferenceSessionBySpeaker')
+    def getConferenceSessionBySpeaker(self, request):
+        """Return all sessions of a given conference that have specified type"""
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+        result = Session.query(Session.speakerEmail == request.speakerEmail,
+                               ancestor=conf)
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in result]
+        )
+
+
+    @endpoints.method(SESSION_CONF_DURATION_GET, SessionForms,
+            path='session/conf/{websafeConferenceKey}/duration/{duration}',
+            http_method='GET', name='getConferenceSessionByDuration')
+    def getConferenceSessionByDuration(self, request):
+        """Return all sessions of a given conference that have specified type"""
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+        result = Session.query(Session.duration <= request.duration,
+                               ancestor=conf)
         return SessionForms(
             items=[self._copySessionToForm(session) for session in result]
         )

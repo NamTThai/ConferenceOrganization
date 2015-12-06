@@ -31,6 +31,12 @@ Conference Organization application, allowing users to create conference, manage
 1. User wishlist is stored in his/her Profile entity. This wishlist consists list of URL safe Session IDs
 1. User can add, remove and view his/her wishlist
 
+## Task 3: Work on indexes and queries
+
+#### 3.1 Come up with 3 additional queries that can be useful in this application
+1. Get all sessions by a specified speaker in a specified conference. The application already had a function to filter session by speaker email. It would be useful to filter by conference as well.
+1. Get all sessions in the specified conference and shorter than a specified amount of time.
+
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org

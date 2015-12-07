@@ -411,18 +411,18 @@ class ConferenceApi(remote.Service):
         # Check if conference exists
         conference = ndb.Key(urlsafe=websafeConfKey).get()
         if not conference:
-            return False
+            return
 
         # Check if speaker exists
         speaker = SessionSpeaker.query(SessionSpeaker.email == speakerEmail).get()
         if not speaker:
-            return False
+            return
 
         # Check if that speaker has at least 2 sessions in the conference
         sessions = Session.query(Session.speakerEmail == speakerEmail,
                                  ancestor=conference.key)
         if sessions.count() < 2:
-            return False
+            return
 
         # Add speaker to memcache
         featuredSpeakers = memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY)
@@ -432,8 +432,6 @@ class ConferenceApi(remote.Service):
             if not speakerEmail in featuredSpeakers:
                 featuredSpeakers.append(speakerEmail)
                 memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, featuredSpeakers)
-
-        return True
 
 
     def _copySessionToForm(self, session):
@@ -462,6 +460,7 @@ class ConferenceApi(remote.Service):
         """Create or update Session object, returning SessionForm/request."""
 
         # get Conference object from request; bail if not found
+        # TODO: change this check to a try-except block
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
         if not conf:
             raise endpoints.NotFoundException(
@@ -478,7 +477,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.UnauthorizedException('Only organizer can create session')
 
         if not request.name:
-            raise endpoints.BadRequestException("Conference 'name' field required")
+            raise endpoints.BadRequestException("Session 'name' field required")
 
         # copy SessionForm/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
@@ -487,15 +486,13 @@ class ConferenceApi(remote.Service):
         for df in SESSION_DEFAULTS:
             if data[df] in (None, []):
                 data[df] = SESSION_DEFAULTS[df]
-                setattr(request, df, SESSION_DEFAULTS[df])
 
         try:
             data['startTime'] = datetime.strptime(data['startTime'][:10], "%H:%M").time()
         except ValueError:
             raise endpoints.BadRequestException("Make sure that your start time is in HH:MM format")
 
-        # generate Profile Key based on user ID and Session
-        # ID based on Profile key get Session key from ID
+        # generate Session key with Conference key as parent
         p_key = conf.key
         s_id = Session.allocate_ids(size=1, parent=p_key)[0]
         s_key = ndb.Key(Session, s_id, parent=p_key)
@@ -507,7 +504,7 @@ class ConferenceApi(remote.Service):
         del data['websafeSessionKey']
 
         # create Session, send email to organizer confirming
-        # creation of Conference & return (modified) ConferenceForm
+        # creation of Session & return (modified) SessionForm
         Session(**data).put()
         taskqueue.add(params={'websafeConfKey': request.websafeConferenceKey,
             'speakerEmail': data['speakerEmail']},
@@ -582,6 +579,7 @@ class ConferenceApi(remote.Service):
         """Return all sessions of a given conference that are less than a
         specified duration"""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+        # TODO: add option to specify minimum duration filter
         result = Session.query(Session.duration <= request.duration,
                                ancestor=conf)
         return SessionForms(
@@ -643,6 +641,9 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No session found with key: %s' % sessionKey)
 
+        # TODO: check that sessionKey point to an entity of Session kind
+        # Not necessary if Profile.sessionKeysInWishList is of ndb.KeyProperty()
+
         # add to wishlist
         # check if user already had the session in wishlist, otherwise add
         if sessionKey in profile.sessionKeysInWishList:
@@ -654,7 +655,6 @@ class ConferenceApi(remote.Service):
 
         # write things back to the datastore & return
         profile.put()
-        session.put()
         return BooleanMessage(data=True)
 
 
@@ -663,6 +663,8 @@ class ConferenceApi(remote.Service):
             http_method='POST', name='removeSessionFromWishlist')
     def removeSessionFromWishlist(self, request):
         """Add a session to user's wishlist, identified by websafe session key"""
+        # TODO: factoring out redundant code for adding and deleting items
+        # to wishlist
         profile = self._getProfileFromUser() # get user Profile
 
         # check if session exists given websafeSessionKey
@@ -695,6 +697,7 @@ class ConferenceApi(remote.Service):
         """Return all sessions in user's wishlist"""
         profile = self._getProfileFromUser() # get user Profile
 
+        # TODO: change Profile.sessionKeysInWishList = ndb.KeyProperty()
         sessionKeys = [ndb.Key(urlsafe=key) for key in profile.sessionKeysInWishList]
         sessions = ndb.get_multi(sessionKeys)
 

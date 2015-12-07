@@ -28,6 +28,7 @@ class Profile(ndb.Model):
     displayName = ndb.StringProperty()
     mainEmail = ndb.StringProperty()
     teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
+    # TODO: Change these properties to ndb.KeyProperty()
     conferenceKeysToAttend = ndb.StringProperty(repeated=True)
     sessionKeysInWishList = ndb.StringProperty(repeated=True)
 
@@ -106,6 +107,7 @@ class Session(ndb.Model):
     speakerEmail    = ndb.StringProperty()
     duration        = ndb.FloatProperty()
     typeOfSession   = ndb.StringProperty()
+    # TODO: date = ndb.DateProperty()
     date            = ndb.StringProperty()
     startTime       = ndb.TimeProperty()
 
@@ -117,6 +119,7 @@ class SessionForm(messages.Message):
     speakerEmail    = messages.StringField(4)
     duration        = messages.FloatField(5)
     typeOfSession   = messages.StringField(6)
+    # TODO: change the following to messages.DateTimeField()
     date            = messages.StringField(7)
     startTime       = messages.StringField(8)
     websafeConferenceKey = messages.StringField(9)

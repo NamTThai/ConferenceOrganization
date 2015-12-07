@@ -16,6 +16,7 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 from datetime import datetime
 
 import endpoints
+import logging
 from protorpc import messages
 from protorpc import message_types
 from protorpc import remote
@@ -37,6 +38,8 @@ from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import Session
 from models import SessionSpeaker
+from models import SpeakerForm
+from models import SpeakerForms
 from models import SessionForm
 from models import SessionForms
 from models import SessionQueryForm
@@ -143,6 +146,8 @@ SESSION_WISHLIST_POST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     websafeSessionKey=messages.StringField(1)
 )
+
+MEMCACHE_FEATURED_SPEAKER_KEY = "MemcacheFeaturedSpeakerKey"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -392,6 +397,44 @@ class ConferenceApi(remote.Service):
 
 
 # - - - Session objects - - - - - - - - - - - - - - - - - - -
+    @staticmethod
+    def _addFeaturedSpeakerToMemcache(websafeConfKey, speakerEmail):
+        """Check if the speaker with specified speaker email can be a featured
+        speaker. If yes, add this speaker to list of featured speakers in
+        memcache
+
+        Args:
+            websafeConfKey: conference key
+            speakerEmail: speaker's email
+        """
+
+        # Check if conference exists
+        conference = ndb.Key(urlsafe=websafeConfKey).get()
+        if not conference:
+            return False
+
+        # Check if speaker exists
+        speaker = SessionSpeaker.query(SessionSpeaker.email == speakerEmail).get()
+        if not speaker:
+            return False
+
+        # Check if that speaker has at least 2 sessions in the conference
+        sessions = Session.query(Session.speakerEmail == speakerEmail,
+                                 ancestor=conference.key)
+        if sessions.count() < 2:
+            return False
+
+        # Add speaker to memcache
+        featuredSpeakers = memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY)
+        if not featuredSpeakers:
+            memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, [speakerEmail])
+        else:
+            if not speakerEmail in featuredSpeakers:
+                featuredSpeakers.append(speakerEmail)
+                memcache.set(MEMCACHE_FEATURED_SPEAKER_KEY, featuredSpeakers)
+
+        return True
+
 
     def _copySessionToForm(self, session):
         """Copy relevant fields from Session to SessionForm."""
@@ -466,6 +509,10 @@ class ConferenceApi(remote.Service):
         # create Session, send email to organizer confirming
         # creation of Conference & return (modified) ConferenceForm
         Session(**data).put()
+        taskqueue.add(params={'websafeConfKey': request.websafeConferenceKey,
+            'speakerEmail': data['speakerEmail']},
+            url='/tasks/featured_speaker'
+        )
         taskqueue.add(params={'email': user.email(),
             'sessionInfo': repr(request)},
             url='/tasks/send_confirmation_email'
@@ -655,6 +702,24 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
+
+
+    @endpoints.method(SESSION_GET, SpeakerForms,
+            path='speaker/feature',
+            http_method='GET', name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return all featured speakers from Memcache"""
+        featuredSpeakers = memcache.get(MEMCACHE_FEATURED_SPEAKER_KEY)
+        speakerForms = []
+        for speakerEmail in featuredSpeakers:
+            speaker = SessionSpeaker.query(SessionSpeaker.email == speakerEmail).get()
+            speakerForm = SpeakerForm()
+            speakerForm.name = speaker.name
+            speakerForm.email = speaker.email
+            speakerForm.check_initialized()
+            speakerForms.append(speakerForm)
+        return SpeakerForms(items=speakerForms)
+
 
 # - - - Profile objects - - - - - - - - - - - - - - - - - - -
 

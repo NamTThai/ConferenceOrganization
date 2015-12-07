@@ -128,6 +128,12 @@ SESSION_SPEAKER_GET = endpoints.ResourceContainer(
     speakerEmail=messages.StringField(1),
 )
 
+SESSION_COMPLEX_GET = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    type=messages.StringField(1),
+    hour=messages.StringField(2),
+)
+
 SESSION_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
     websafeConferenceKey=messages.StringField(1),
@@ -476,45 +482,6 @@ class ConferenceApi(remote.Service):
             speaker.name = name
         return speaker.put()
 
-    # @ndb.transactional()
-    # def _updateConferenceObject(self, request):
-    #     user = endpoints.get_current_user()
-    #     if not user:
-    #         raise endpoints.UnauthorizedException('Authorization required')
-    #     user_id = getUserId(user)
-    #
-    #     # copy ConferenceForm/ProtoRPC Message into dict
-    #     data = {field.name: getattr(request, field.name) for field in request.all_fields()}
-    #
-    #     # update existing conference
-    #     conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
-    #     # check that conference exists
-    #     if not conf:
-    #         raise endpoints.NotFoundException(
-    #             'No conference found with key: %s' % request.websafeConferenceKey)
-    #
-    #     # check that user is owner
-    #     if user_id != conf.organizerUserId:
-    #         raise endpoints.ForbiddenException(
-    #             'Only the owner can update the conference.')
-    #
-    #     # Not getting all the fields, so don't create a new object; just
-    #     # copy relevant fields from ConferenceForm to Conference object
-    #     for field in request.all_fields():
-    #         data = getattr(request, field.name)
-    #         # only copy fields where we get data
-    #         if data not in (None, []):
-    #             # special handling for dates (convert string to Date)
-    #             if field.name in ('startDate', 'endDate'):
-    #                 data = datetime.strptime(data, "%Y-%m-%d").date()
-    #                 if field.name == 'startDate':
-    #                     conf.month = data.month
-    #             # write to Conference object
-    #             setattr(conf, field.name, data)
-    #     conf.put()
-    #     prof = ndb.Key(Profile, user_id).get()
-    #     return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
-    #
 
     @endpoints.method(SessionForm, SessionForm,
             path='session',
@@ -552,7 +519,7 @@ class ConferenceApi(remote.Service):
             path='session/conf/{websafeConferenceKey}/speaker/{speakerEmail}',
             http_method='GET', name='getConferenceSessionBySpeaker')
     def getConferenceSessionBySpeaker(self, request):
-        """Return all sessions of a given conference that have specified type"""
+        """Return all sessions of a given conference that have specified speaker"""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey)
         result = Session.query(Session.speakerEmail == request.speakerEmail,
                                ancestor=conf)
@@ -565,7 +532,8 @@ class ConferenceApi(remote.Service):
             path='session/conf/{websafeConferenceKey}/duration/{duration}',
             http_method='GET', name='getConferenceSessionByDuration')
     def getConferenceSessionByDuration(self, request):
-        """Return all sessions of a given conference that have specified type"""
+        """Return all sessions of a given conference that are less than a
+        specified duration"""
         conf = ndb.Key(urlsafe=request.websafeConferenceKey)
         result = Session.query(Session.duration <= request.duration,
                                ancestor=conf)
@@ -585,6 +553,32 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in result]
         )
+
+
+    @endpoints.method(SESSION_COMPLEX_GET, SessionForms,
+            path='session/complex',
+            http_method='GET', name='getSessionByComplexInequality')
+    def getSessionByComplexInequality(self, request):
+        """Return all sessions that are different from specified type and
+        start before specified time (format HH:MM)
+        """
+        if not request.type:
+            raise BadRequestException("Type is required")
+        if not request.hour:
+            raise BadRequestException("Hour is required")
+
+        result = Session.query(Session.typeOfSession != request.type)
+        specifiedTime = None
+        try:
+            specifiedTime = datetime.strptime(request.hour, "%H:%M").time()
+        except ValueError:
+            raise BadRequestException("Time must be in HH:MM format")
+        items = []
+        for session in result:
+            if (session.startTime < specifiedTime):
+                items.append(self._copySessionToForm(session))
+        return SessionForms(items=items)
+
 
 
     @endpoints.method(SESSION_WISHLIST_POST, BooleanMessage,
@@ -661,86 +655,6 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
-
-
-    # @endpoints.method(CONF_POST_REQUEST, ConferenceForm,
-    #         path='conference/{websafeConferenceKey}',
-    #         http_method='PUT', name='updateConference')
-    # def updateConference(self, request):
-    #     """Update conference w/provided fields & return w/updated info."""
-    #     return self._updateConferenceObject(request)
-    #
-    # def _getQuery(self, request):
-    #     """Return formatted query from the submitted filters."""
-    #     q = Conference.query()
-    #     inequality_filter, filters = self._formatFilters(request.filters)
-    #
-    #     # If exists, sort on inequality filter first
-    #     if not inequality_filter:
-    #         q = q.order(Conference.name)
-    #     else:
-    #         q = q.order(ndb.GenericProperty(inequality_filter))
-    #         q = q.order(Conference.name)
-    #
-    #     for filtr in filters:
-    #         if filtr["field"] in ["month", "maxAttendees"]:
-    #             filtr["value"] = int(filtr["value"])
-    #         formatted_query = ndb.query.FilterNode(filtr["field"], filtr["operator"], filtr["value"])
-    #         q = q.filter(formatted_query)
-    #     return q
-    #
-    #
-    # def _formatFilters(self, filters):
-    #     """Parse, check validity and format user supplied filters."""
-    #     formatted_filters = []
-    #     inequality_field = None
-    #
-    #     for f in filters:
-    #         filtr = {field.name: getattr(f, field.name) for field in f.all_fields()}
-    #
-    #         try:
-    #             filtr["field"] = FIELDS[filtr["field"]]
-    #             filtr["operator"] = OPERATORS[filtr["operator"]]
-    #         except KeyError:
-    #             raise endpoints.BadRequestException("Filter contains invalid field or operator.")
-    #
-    #         # Every operation except "=" is an inequality
-    #         if filtr["operator"] != "=":
-    #             # check if inequality operation has been used in previous filters
-    #             # disallow the filter if inequality was performed on a different field before
-    #             # track the field on which the inequality operation is performed
-    #             if inequality_field and inequality_field != filtr["field"]:
-    #                 raise endpoints.BadRequestException("Inequality filter is allowed on only one field.")
-    #             else:
-    #                 inequality_field = filtr["field"]
-    #
-    #         formatted_filters.append(filtr)
-    #     return (inequality_field, formatted_filters)
-    #
-    #
-    # @endpoints.method(ConferenceQueryForms, ConferenceForms,
-    #         path='queryConferences',
-    #         http_method='POST',
-    #         name='queryConferences')
-    # def queryConferences(self, request):
-    #     """Query for conferences."""
-    #     conferences = self._getQuery(request)
-    #
-    #     # need to fetch organiser displayName from profiles
-    #     # get all keys and use get_multi for speed
-    #     organisers = [(ndb.Key(Profile, conf.organizerUserId)) for conf in conferences]
-    #     profiles = ndb.get_multi(organisers)
-    #
-    #     # put display names in a dict for easier fetching
-    #     names = {}
-    #     for profile in profiles:
-    #         names[profile.key.id()] = profile.displayName
-    #
-    #     # return individual ConferenceForm object per Conference
-    #     return ConferenceForms(
-    #             items=[self._copyConferenceToForm(conf, names[conf.organizerUserId]) for conf in \
-    #             conferences]
-    #     )
 
 # - - - Profile objects - - - - - - - - - - - - - - - - - - -
 

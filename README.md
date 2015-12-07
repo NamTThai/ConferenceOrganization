@@ -37,6 +37,11 @@ Conference Organization application, allowing users to create conference, manage
 1. Get all sessions by a specified speaker in a specified conference. The application already had a function to filter session by speaker email. It would be useful to filter by conference as well.
 1. Get all sessions in the specified conference and shorter than a specified amount of time.
 
+#### 3.2 Get sessions with 2 inequality filters
+* In this task, the app let users specified `SESSION TYPE` and `HOUR`. It will then queries all sessions that are different from `SESSION TYPE` and starts before `HOUR`
+* This is a tricky problem, given that datastore queries only allow 1 inequality in each query
+* This problem can be solved by performing the second inequality filter on local server after fetching data using the first inequality filter.
+
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org
